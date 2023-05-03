@@ -1,0 +1,300 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# In[1]:
+
+
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.tree import DecisionTreeClassifier
+from sklearn import svm
+from sklearn.linear_model import LogisticRegression
+from sklearn.neighbors import KNeighborsClassifier
+#from sklearn.ensemble import xgbclassifier
+#from xgboost import XGBClassifier
+#import xgboost as xgb
+from sklearn.metrics import jaccard_similarity_score
+from sklearn.metrics import f1_score
+#from sklearn.metrics import accuracy
+
+
+
+# In[2]:
+
+
+df = pd.read_csv('C:/cybersecurity_training.csv',  sep='|', index_col=False)
+
+
+# In[3]:
+
+
+df.head(100)
+
+
+# In[4]:
+
+
+
+list(df.columns)
+missing_data = df.isnull()
+
+
+# In[5]:
+
+
+for column in missing_data.columns.values.tolist():
+    print(column)
+    print (missing_data[column].value_counts())
+    print("") 
+
+
+# In[6]:
+
+
+feature = df[[
+ 'categoryname',
+ 'ipcategory_name',
+ 'ipcategory_scope',
+ 'parent_category',
+ 'grandparent_category',
+ 'overallseverity',
+ 'weekday',
+ 'correlatedcount',
+ 'n1',
+ 'n2',
+ 'n3',
+ 'n4',
+ 'n5',
+ 'n6',
+ 'n7',
+ 'n8',
+ 'n9',
+ 'n10',
+ 'score',
+ 'srcip_cd',
+ 'dstip_cd',
+ 'srcport_cd',
+ 'dstport_cd',
+ 'alerttype_cd',
+ 'direction_cd',
+ 'eventname_cd',
+ 'severity_cd',
+ 'reportingdevice_cd',
+ 'devicetype_cd',
+ 'devicevendor_cd',
+ 'domain_cd',
+ 'protocol_cd',
+ 'username_cd',
+ 'srcipcategory_cd',
+ 'dstipcategory_cd',
+ 'isiptrusted',
+ 'untrustscore',
+ 'flowscore',
+ 'trustscore',
+ 'enforcementscore',
+ 'dstipcategory_dominate',
+ 'srcipcategory_dominate',
+ 'dstportcategory_dominate',
+ 'srcportcategory_dominate',
+ 'thrcnt_month',
+ 'thrcnt_week',
+ 'thrcnt_day',
+ 'p6',
+ 'p9',
+ 'p5m',
+ 'p5w',
+ 'p5d',
+ 'p8m',
+ 'p8w',
+ 'p8d']]
+
+
+# In[7]:
+
+
+#mode_feature = feature[[ 'n1',
+# 'n2',
+# 'n3',
+# 'n4',
+# 'n5',
+# 'n6',
+# 'n7',
+# 'n8',
+# 'n9',
+# 'n10',
+# 'score']].astype("float").mode(axis=0)
+
+feature.replace("", np.nan, inplace = True)
+
+feature['score'].value_counts()
+
+feature['score'].fillna(1, inplace = True)
+
+feature.fillna(0, inplace = True)
+
+#feature[[ 'n1',
+# 'n2',
+# 'n3',
+# 'n4',
+# 'n5',
+# 'n6',
+# 'n7',
+# 'n8',
+# 'n9',
+# 'n10',
+# 'score']].replace(np.nan, mode_feature, inplace=True)
+
+
+# In[8]:
+
+
+feature = pd.concat([feature,pd.get_dummies(df[['categoryname','ipcategory_name','ipcategory_scope',
+                                                    'grandparent_category','weekday','dstipcategory_dominate',
+                                                    'srcipcategory_dominate']])], axis=1)
+
+
+feature.drop(['categoryname','ipcategory_name','ipcategory_scope',
+                                                    'grandparent_category','weekday','dstipcategory_dominate',
+                                                    'srcipcategory_dominate'],axis=1, inplace=True)
+
+
+# In[9]:
+
+
+x = feature
+y = df['notified']
+
+
+# In[10]:
+
+
+
+x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3, random_state=4)
+print ('Train set:', x_train.shape,  y_train.shape)
+print ('Test set:', x_test.shape,  y_test.shape)
+
+
+# In[11]:
+
+
+x_train.head(10)
+
+
+# In[12]:
+
+
+x_test.head(10)
+
+
+# In[13]:
+
+
+from sklearn.pipeline import Pipeline
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import KFold
+sc = StandardScaler()
+x_train = sc.fit_transform(x_train)
+x_test = sc.transform(x_test)
+
+
+# In[14]:
+
+
+DT_model = DecisionTreeClassifier(criterion="entropy", max_depth = 4)
+DT_model.fit(x_train,y_train)
+
+DT_yhat = DT_model.predict(x_test)
+DT_yhat_all = DT_model.predict(x)
+print("DT Jaccard index: %.2f" % jaccard_similarity_score(y_test, DT_yhat))
+print("DT F1-score: %.2f" % f1_score(y_test, DT_yhat, average='weighted') )
+
+
+# In[15]:
+
+
+pipeline = Pipeline([('transformer', sc), ('estimator', DT_model)])
+
+cv = KFold(n_splits=4)
+scores = cross_val_score(pipeline, x, y, cv = cv)
+print(scores)
+
+
+# In[ ]:
+
+
+
+
+
+# In[16]:
+
+
+SVM_model = svm.SVC()
+SVM_model.fit(x_train, y_train) 
+
+SVM_yhat = SVM_model.predict(x_test)
+print("SVM Jaccard index: %.2f" % jaccard_similarity_score(y_test, SVM_yhat))
+print("SVM F1-score: %.2f" % f1_score(y_test, SVM_yhat, average='weighted'))
+
+
+# In[17]:
+
+
+Ks=15
+mean_acc=np.zeros((Ks-1))
+std_acc=np.zeros((Ks-1))
+ConfustionMx=[];
+for n in range(1,Ks):
+    
+    #Train Model and Predict  
+    kNN_model = KNeighborsClassifier(n_neighbors=n).fit(x_train,y_train)
+    yhat = kNN_model.predict(x_test)
+    
+    
+    mean_acc[n-1]=np.mean(yhat==y_test);
+    
+    std_acc[n-1]=np.std(yhat==y_test)/np.sqrt(yhat.shape[0])
+mean_acc
+
+k = 5
+#Train Model and Predict  
+kNN_model = KNeighborsClassifier(n_neighbors=k).fit(x_train,y_train)
+
+knn_yhat = kNN_model.predict(x_test)
+print("KNN Jaccard index: %.2f" % jaccard_similarity_score(y_test, knn_yhat))
+print("KNN F1-score: %.2f" % f1_score(y_test, knn_yhat, average='weighted'))
+
+
+# In[18]:
+
+
+LR_model = LogisticRegression(C=0.01).fit(x_train,y_train)
+LR_yhat = LR_model.predict(x_test)
+LR_yhat_prob = LR_model.predict_proba(x_test)
+print("LR Jaccard index: %.2f" % jaccard_similarity_score(y_test, LR_yhat))
+print("LR F1-score: %.2f" % f1_score(y_test, LR_yhat, average='weighted') )
+#print("LR LogLoss: %.2f" % log_loss(y_test, LR_yhat_prob))
+
+
+# In[19]:
+
+
+data = [['Decision Tree', jaccard_similarity_score(y_test, DT_yhat), f1_score(y_test, DT_yhat, average='weighted')],
+         ['SVM', jaccard_similarity_score(y_test, SVM_yhat), f1_score(y_test, SVM_yhat, average='weighted')],
+         ['Logistic Regression', jaccard_similarity_score(y_test, LR_yhat), f1_score(y_test, LR_yhat, average='weighted')],
+         ['KNN',jaccard_similarity_score(y_test, knn_yhat), f1_score(y_test, knn_yhat, average='weighted')]]
+         #['XGB',jaccard_similarity_score(y_test, xgb_yhat),f1_score(y_test, xgb_yhat, average='weighted') ]] 
+  
+# Create the pandas DataFrame 
+scores = pd.DataFrame(data, columns = ['Algorithm','Jaccard-score', 'F1-score',]) 
+  
+# print dataframe. 
+print(scores)
+
+
+# In[ ]:
+
+
+
+
